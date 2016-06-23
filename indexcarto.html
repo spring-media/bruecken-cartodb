@@ -1,0 +1,272 @@
+<!doctype html>
+        <!--[if lt IE 7 ]> <html class="ie6 www" lang="de"> <![endif]-->
+        <!--[if IE 7 ]>    <html class="ie7 www" lang="de"> <![endif]-->
+        <!--[if IE 8 ]>    <html class="ie8 www" lang="de"> <![endif]-->
+        <!--[if (gte IE 9)|!(IE)]><!-->
+        <html class="www" lang="de">
+        <!--<![endif]-->
+
+          <head>
+<meta name="viewport" content="width=device-width, initial-scale=1,user-scalable=no"/>
+<link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon-144x144.png"/>
+<link rel="canonical" href="http://www.welt.de" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+<link rel="stylesheet" href="http://libs.cartocdn.com/cartodb.js/v3/3.15/themes/css/cartodb.css" />
+</head>
+<body>
+<style>
+body {
+  margin:0;
+  padding:0;
+}
+#map {
+	width:100vw;
+	height:100vh;
+}
+#output {
+  position:fixed;
+  bottom:0;
+  left:50%;
+  width:100vw;
+  height:30px;
+  text-align: center;
+  background:rgba(0,0,0,.7);
+  color:#fff;
+  overflow:hidden;
+  font-size:1rem;
+  font-family:Arial;
+  font-weight:light;
+  line-height:30px;
+  -webkit-transform:translateX(-50%);
+}
+#output #matches {
+  font-weight:bold;
+  margin-left:50px;
+}
+html.touch #output {
+  height:70px;
+}
+html.touch #radius {
+  -webkit-transform:scale(1.5);
+  margin:0 45px;
+}
+</style>
+    <link rel="stylesheet" href="dist/leaflet-routing-machine.css" />
+
+
+<div id="map"></div>
+<div id="output">
+  <span id="radiusLabel">Umkreis:</span> <input id="radius" type="range" min="100" max="1000" step="100" value="300"/> <span id="radiusNumber">300m</span><span id="matches">0</span> Treffer
+</div>
+<script src="http://libs.cartocdn.com/cartodb.js/v3/3.15/cartodb.js"></script>
+     <script src="dist/leaflet-routing-machine.js"></script>
+<script src='https://api.tiles.mapbox.com/mapbox.js/plugins/turf/v2.0.2/turf.min.js'></script>
+<script>
+if ('ontouchstart' in window) {
+    //iOS & android
+    $("html").addClass("touch");
+}
+$("#radius").on("change",function() {
+  $("#radiusNumber").text(this.value+"m");
+  showBridgesCrossedWithoutCarto();
+});
+// get the viz.json url from the CartoDB Editor
+// - click on visualize
+// - create new visualization
+// - make visualization public
+// - click on publish
+// - go to API tab
+var line,line2;
+var sqlLayer;
+var worstTurf;
+var worstJson;
+window.onload = function() {
+
+  cartodb.createVis('map', 'https://vmucha.cartodb.com/api/v2/viz/d358e706-0d50-11e6-b41a-0ecd1babdde5/viz.json',{"layer_selector":false,"mobile_layout":true}) 
+
+  .done(function(vis, layers) {
+
+
+
+
+    // layer 0 is the base layer, layer 1 is cartodb layer
+    // when setInteraction is disabled featureOver is triggered
+    //layers[1].setInteraction(true);
+    //layers[1].on('featureOver', function(e, latlng, pos, data, layerNumber) {
+     // console.log(e, latlng, pos, data, layerNumber);
+    //});
+
+    // you can get the native map to work with it
+    layer = layers[1];
+    //
+    /*layer.getSubLayer(2).remove();//hide();
+layer.getSubLayer(1).remove();//.hide();
+layer.getSubLayer(0).remove();//.hide();*/
+ /*   {
+  sql: "SELECT * FROM table_name",
+  cartocss: "#layer { marker-fill: red; }",
+  interactivity: 'cartodb_id, area, column' // optional
+}*/
+    var sql = {
+      sql:"select *,count(*) as count from csv_worst", //group by?
+      cartocss:"#worst2{  marker-fill-opacity: 0.9;marker-line-color: #FFF;marker-line-width: 1;marker-line-opacity: 1;marker-placement: point;marker-type: ellipse;marker-width: 20;marker-fill: #B81609;marker-allow-overlap: true;}",
+      interactivity:""
+    }
+    sqlLayer = layer.createSubLayer(sql);
+    sqlLayer.hide();
+    var map = vis.getNativeMap(); 
+  /*L.Routing.Localization.de.directions.SE = "Südosten";
+  L.Routing.Localization.de.directions.S = "Süden";
+  L.Routing.Localization.de.directions.SW = "Südwesten";*/
+ router = L.Routing.control({
+        show: true,
+        language:"de",
+        draggableWaypoints: true,
+        //addWaypoints: false,
+        //lineOptions: opts.lineOptions,
+        /*createMarker: function(i, wp, nWaypoints) {
+          var options = {
+            draggable: this.draggableWaypoints,
+            icon: opts.icon
+          },
+          marker = L.marker(wp.latLng, options);
+          return marker;
+        }*/
+        waypoints: [
+        	L.latLng(51.227741, 6.773456),
+        	L.latLng(52.030228, 8.532471)
+    	]
+      }).addTo(map);
+ router.on("routesfound",function(re) {
+ 	console.log("found route",re);
+ 	line2 = re.routes[0].coordinates;
+  //line = turf.linestring(re.routes[0].coordinates, { name: 'line' } );
+  //showBridgesCrossed();
+  showBridgesCrossedWithoutCarto();
+ 	
+ 	  
+
+ });
+    // now, perform any operations you need, e.g. assuming map is a L.Map object:
+     //map.setZoom(3);
+
+ var sql = new cartodb.SQL({ user: 'vmucha' });
+      sql.execute("SELECT cartodb_id,ST_AsGeoJSON(the_geom) as the_geom FROM csv_worst")
+  .done(function(data) {
+    console.log("sql done",data.rows);
+    worstJson = [];
+    for (point in data.rows) {
+      var pointJSON = {
+        "type": "Feature",
+        "properties": {"cartodb_id":data.rows[point].cartodb_id},
+        "geometry": JSON.parse(data.rows[point].the_geom)
+      }  
+      //var oneMileOut = turf.buffer(pointJSON, 3, 'kilometers');
+      //var worstTurf = L.geoJson(oneMileOut).addTo(map);
+      worstJson.push(pointJSON);
+    }
+    worstTurf = L.geoJson(worstJson,{
+      pointToLayer: function (feature, latlng) {
+        return L.circleMarker(latlng);
+      }
+    }).addTo(map);
+    worstTurf.setStyle({
+        color: '#ff0',
+        fillColor:"#f00",
+        radius:10,
+        opacity: 0,
+        weight: 0,
+        fillOpacity: 0
+      });  
+    //console.log("point",pointJSON);
+    
+
+//console.log("omo",oneMileOut);
+
+  })
+  .error(function(errors) {
+    // errors contains a list of errors
+    console.log("errors:" + errors);
+  });
+
+ });
+    // map.panTo([50.5, 30.5]);
+}
+
+function showBridgesCrossedWithoutCarto() {
+//var isInside = turf.inside(nullIsland, oneMileOut); // returns true
+console.log("crossed?");
+var found = [];
+var count = 0;
+var radius = $("#radius")[0].value/1000;
+
+
+/*for(bridge in worstJson) {
+  for(point in line2) {
+    count++;
+    if(turf.distance(turf.point([line2[point].lng,line2[point].lat]),worstJson[bridge],"kilometers")<=10) {
+      var cartoid = worstJson[bridge].properties.cartodb_id;
+      if(found.indexOf(cartoid) !== -1) {
+        console.log("schon drin");
+      } else {
+        console.log("treffer",worstJson[bridge].properties.cartodb_id);  
+        found.push(cartoid);  
+      }
+    }
+  }
+  console.log(found);
+}*/
+//console.log(count);
+console.log("for worst");
+  worstTurf.eachLayer(function(layer) {
+    layer.setStyle({
+      fillOpacity:0
+    })
+    //console.log("for point",line2);
+    for(point in line2) {
+      //console.log("in point");
+      if(turf.distance(turf.point([line2[point].lng,line2[point].lat]),layer.feature,"kilometers")<=radius) { 
+        //console.log("if point"); 
+        var cartoid = layer.feature.properties.cartodb_id;
+        if(found.indexOf(cartoid) !== -1) {
+          console.log("schon drin");
+        } else {
+          console.log("treffer",cartoid);  
+          found.push(cartoid);  
+        }
+        layer.setStyle({
+          fillOpacity:1
+        });
+        break;
+      }
+      //console.log("end if point");
+    }
+    console.log("nach point");
+    /*if(found.indexOf(layer.feature.properties.cartodb_id) !== -1) {
+      console.log("hier",layer);
+    }*/
+  });
+  console.log("nach worst");
+  //alert("Umkreis: "+radius+"km. Treffer: "+found.length);
+  $("#output #matches").text(found.length);
+}
+
+function showBridgesCrossed() {
+
+var qryString = 'select * from csv_worst where ST_DWithin(ST_Transform(the_geom,3857), ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(\''+'{"type":"LineString","coordinates":'+JSON.stringify(line2.map(function(d) {
+return [d.lng,d.lat]
+}))+'}'+'\'),4326),3857),'+15000+')';
+var sql = new cartodb.SQL({ user: 'vmucha' });
+sql.execute(qryString)  .done(function(data) {
+    console.log("sql execute",data.rows);
+  })
+  .error(function(errors) {
+    console.log("errors:" + errors);
+  });
+sqlLayer.setSQL(qryString);
+//sqlLayer.show();
+}
+</script>
+</body>
+</html>
