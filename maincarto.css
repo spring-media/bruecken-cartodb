@@ -1,0 +1,36 @@
+
+body {
+  margin:0;
+  padding:0;
+}
+#map {
+	width:100vw;
+	height:100vh;
+}
+#output {
+  position:fixed;
+  bottom:0;
+  left:50%;
+  width:100vw;
+  height:30px;
+  text-align: center;
+  background:rgba(0,0,0,.7);
+  color:#fff;
+  overflow:hidden;
+  font-size:1rem;
+  font-family:Arial;
+  font-weight:light;
+  line-height:30px;
+  -webkit-transform:translateX(-50%);
+}
+#output #matches {
+  font-weight:bold;
+  margin-left:50px;
+}
+html.touch #output {
+  height:70px;
+}
+html.touch #radius {
+  -webkit-transform:scale(1.5);
+  margin:0 45px;
+}
